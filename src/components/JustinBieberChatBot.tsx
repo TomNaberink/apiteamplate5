@@ -4,8 +4,9 @@ import { useState } from 'react'
 
 export default function JustinBieberChatBot() {
   const [message, setMessage] = useState('')
-  const [conversation, setConversation] = useState<Array<{role: 'user' | 'justin', content: string}>>([])
+  const [conversation, setConversation] = useState<Array<{role: 'user' | 'justin' | 'teacher', content: string}>>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [hasTeacherResponded, setHasTeacherResponded] = useState(false)
 
   const sendMessage = async () => {
     if (!message.trim()) return
@@ -46,6 +47,43 @@ export default function JustinBieberChatBot() {
     }
   }
 
+  const requestTeacherFeedback = async () => {
+    if (hasTeacherResponded || conversation.length === 0) return
+
+    setIsLoading(true)
+    try {
+      const userMessages = conversation
+        .filter(msg => msg.role === 'user')
+        .map(msg => msg.content)
+        .join('\n')
+
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          message: `You are an experienced English teacher reviewing a HAVO 4 (Dutch high school) student's English conversation. Analyze their English usage and provide constructive feedback on: grammar, vocabulary, sentence structure, and general language proficiency. Be encouraging but point out areas for improvement. Here are their messages:\n\n${userMessages}` 
+        }),
+      })
+
+      if (!res.ok) {
+        throw new Error('Failed to get response')
+      }
+
+      const data = await res.json()
+      setConversation([
+        ...conversation,
+        { role: 'teacher', content: data.response }
+      ])
+      setHasTeacherResponded(true)
+    } catch (error) {
+      console.error('Error:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -56,14 +94,23 @@ export default function JustinBieberChatBot() {
   return (
     <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden">
       {/* Header */}
-      <div className="bg-purple-600 p-4 flex items-center space-x-3">
-        <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center">
-          <span className="text-xl">🎤</span>
+      <div className="bg-purple-600 p-4 flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center">
+            <span className="text-xl">🎤</span>
+          </div>
+          <div>
+            <h2 className="text-white font-bold">Chat with Justin Bieber</h2>
+            <p className="text-purple-200 text-sm">Never say never, belieber!</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-white font-bold">Chat with Justin Bieber</h2>
-          <p className="text-purple-200 text-sm">Never say never, belieber!</p>
-        </div>
+        <button
+          onClick={requestTeacherFeedback}
+          disabled={isLoading || hasTeacherResponded || conversation.length === 0}
+          className="bg-white text-purple-600 px-4 py-2 rounded-lg hover:bg-purple-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+        >
+          {hasTeacherResponded ? '✓ Feedback Given' : '📝 Get English Feedback'}
+        </button>
       </div>
 
       {/* Chat Messages */}
@@ -77,12 +124,16 @@ export default function JustinBieberChatBot() {
               className={`max-w-[80%] rounded-2xl p-3 ${
                 msg.role === 'user'
                   ? 'bg-purple-100 text-gray-800'
+                  : msg.role === 'teacher'
+                  ? 'bg-blue-100'
                   : 'bg-gray-100'
               }`}
             >
-              {msg.role === 'justin' && (
-                <div className="text-xs text-purple-600 font-medium mb-1">
-                  Justin Bieber
+              {msg.role !== 'user' && (
+                <div className={`text-xs font-medium mb-1 ${
+                  msg.role === 'teacher' ? 'text-blue-600' : 'text-purple-600'
+                }`}>
+                  {msg.role === 'teacher' ? 'English Teacher' : 'Justin Bieber'}
                 </div>
               )}
               <p className="text-sm">{msg.content}</p>
